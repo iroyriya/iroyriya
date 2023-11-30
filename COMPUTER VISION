@@ -1,0 +1,255 @@
+import numpy as np
+
+data = np.load('images.npy', allow_pickle=True)
+
+print(X[0].shape)
+
+for i in range(len(X)):
+    # Get the image and its dimensions
+    image = X[i]
+    image_height, image_width, _ = image.shape  # _ for the third channel (RGB)
+
+    # Ensure coordinates are within image dimensions
+    y1, x1, y2, x2 = Y[i]
+    y1 = max(0, min(y1, image_height))  # Ensure y1 is within [0, image_height]
+    x1 = max(0, min(x1, image_width))   # Ensure x1 is within [0, image_width]
+    y2 = min(image_height, max(y2, 0))  # Ensure y2 is within [0, image_height]
+    x2 = min(image_width, max(x2, 0))   # Ensure x2 is within [0, image_width]
+
+    # Replace pixels within the masked area with 1
+    image[y1:y2, x1:x2, :] = 1
+
+    # Update the image in the X array
+    X[i] = image
+
+from sklearn.model_selection import train_test_split
+
+#splitting
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=9, random_state=42)
+
+import matplotlib.pyplot as plt
+
+random_index = np.random.randint(0, len(X_train))
+random_image = X_train[random_index]
+
+# Display the original image
+plt.imshow(random_image, cmap='gray')
+plt.title('Original Image')
+plt.show()
+
+# Display the masked image
+plt.imshow(X_train[random_index], cmap='gray')
+plt.title('Masked Image')
+plt.show()
+
+
+from tensorflow.keras.applications import MobileNet
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Conv2D, UpSampling2D
+
+# Load pre-trained MobileNet model
+base_model = MobileNet(input_shape=(224, 224, 3), include_top=False)
+
+# Add convolutional layers for segmentation
+x = base_model.output
+x = Conv2D(1, (1, 1), activation='sigmoid')(x)
+x = UpSampling2D(size=(32, 32))(x)  # Adjust size based on your image shape
+model = Model(inputs=base_model.input, outputs=x)
+
+from tensorflow.keras.losses import binary_crossentropy
+import tensorflow.keras.backend as K
+
+def dice_coefficient(y_true, y_pred):
+    intersection = K.sum(y_true * y_pred)
+    union = K.sum(y_true) + K.sum(y_pred)
+    return (2.0 * intersection + 1e-5) / (union + 1e-5)
+
+def custom_loss(y_true, y_pred):
+    return binary_crossentropy(y_true, y_pred) - K.log(dice_coefficient(y_true, y_pred))
+
+import cv2
+
+def preprocess_image(image_path, target_height, target_width):
+    # Loading the image
+    image = cv2.imread(image_path)
+    
+    # Resizing the image to the target dimensions
+    image = cv2.resize(image, (target_width, target_height))
+    
+    # Normalizing the image (convert pixel values to the range [0, 1])
+    image = image / 255.0
+    
+    return image
+
+image = cv2.imread(test_image_path)
+if image is None:
+    print("Error: Failed to load the image.")
+
+# Loading and preprocessing the test image
+test_image_path = 'D:\Downloads\images.npy'  # Replace with the actual image path
+target_height = 333  # Set the desired height
+target_width = 650   # Set the desired width
+
+preprocessed_test_image = preprocess_image(test_image_path, target_height, target_width)
+
+from tensorflow.keras.losses import binary_crossentropy
+import tensorflow.keras.backend as K
+
+def dice_coefficient(y_true, y_pred):
+    intersection = K.sum(y_true * y_pred)
+    union = K.sum(y_true) + K.sum(y_pred)
+    return (2.0 * intersection + 1e-5) / (union + 1e-5)
+
+def custom_loss(y_true, y_pred):
+    return binary_crossentropy(y_true, y_pred) - K.log(dice_coefficient(y_true, y_pred))
+
+#PART B
+import cv2
+import os
+
+# Path to the folder containing training images
+folder_path = 'D:\Downloads\training_images\training_images'
+
+# Initializing an empty list to store image file paths
+image_paths = []
+
+# Loop through the files in the folder
+for filename in os.listdir(folder_path):
+    # Checking if the file is an image (you can add more image extensions if needed)
+    if filename.endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+        # Construct the full path to the image file
+        image_path = os.path.join(folder_path, filename)
+        image_paths.append(image_path)
+
+# Loading the Haar Cascade for face detection
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+
+# Initializing a list to store detected faces
+detected_faces = []
+
+# Loop through each image and detect faces
+for image_path in image_paths:
+    # Reading the image
+    img = cv2.imread(image_path)
+    
+    # Converting the image to grayscale (required for face detection)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Detecting faces in the image
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    
+    # Appending the detected faces to the list
+    detected_faces.append(faces)
+
+
+import pandas as pd
+
+# Initializing lists to store metadata
+image_file_names = []
+face_count = []
+
+# Loop through detected faces and extract metadata
+for i, faces in enumerate(detected_faces):
+    image_file_names.append(os.path.basename(image_paths[i]))  # Extract file name
+    face_count.append(len(faces))  # Count of faces in the image
+
+# Creating a DataFrame from the extracted metadata
+df = pd.DataFrame({'Image File': image_file_names, 'Face Count': face_count})
+
+# Defining the path to save the output CSV file
+output_csv_path = 'output_faces_metadata.csv'
+
+# Saving the DataFrame to a CSV file
+df.to_csv(output_csv_path, index=False)
+
+# Import necessary libraries
+import os
+import zipfile
+import cv2
+import numpy as np
+from keras.models import load_model
+from sklearn.decomposition import PCA
+from sklearn.svm import SVC
+
+# Specifying the directory 
+extract_dir = 'PINS'
+
+# Checking if the directory exists, and create it if it doesn't
+if not os.path.exists(extract_dir):
+    os.makedirs(extract_dir)
+
+# Unzip the 'PINS.zip' file into the 'PINS' directory
+with zipfile.ZipFile('PINS.zip', 'r') as zip_ref:
+    zip_ref.extractall(extract_dir)
+
+print(f"Files extracted to '{extract_dir}'.")
+
+# Step 2: Write a function to create metadata of the image
+def create_metadata(image_path):
+    # Load the image
+    image = cv2.imread(image_path)
+    
+    # Extract metadata (example: image dimensions)
+    metadata = {
+        'width': image.shape[1],
+        'height': image.shape[0]
+        # Add more metadata as needed
+    }
+    
+    return metadata
+
+# Step 3: Write a loop to iterate through each image and create metadata
+metadata_list = []
+image_dir = 'PINS'
+for filename in os.listdir(image_dir):
+    if filename.endswith('.jpg'):
+        image_path = os.path.join(image_dir, filename)
+        metadata = create_metadata(image_path)
+        metadata_list.append(metadata)
+
+# Step 4: Generate Embeddings vectors using a pre-trained model
+model = load_model('vgg_face_weights.h5')
+
+def generate_embeddings(image_path):
+    image = cv2.imread(image_path)
+    image = cv2.resize(image, (224, 224))
+    image = np.expand_dims(image, axis=0)
+    embeddings = model.predict(image)[0]
+    return embeddings
+
+embeddings_list = []
+for filename in os.listdir(image_dir):
+    if filename.endswith('.jpg'):
+        image_path = os.path.join(image_dir, filename)
+        embeddings = generate_embeddings(image_path)
+        embeddings_list.append(embeddings)
+
+# Step 6: Use PCA for dimensionality reduction
+pca = PCA(n_components=50)  # Adjust the number of components as needed
+reduced_embeddings = pca.fit_transform(embeddings_list)
+
+# Step 7: Build an SVM classifier
+labels = []  # Create a list of labels for each image (e.g., person's name)
+svm_classifier = SVC(kernel='linear')
+svm_classifier.fit(reduced_embeddings, labels)
+
+# Step 8: Import and display test images
+test_image1 = cv2.imread('Benedict Cumberbatch9.jpg')
+test_image2 = cv2.imread('Dwayne Johnson4.jpg')
+
+# Step 9: Use the trained SVM model to predict the faces in test images
+test_embeddings1 = generate_embeddings('Benedict Cumberbatch9.jpg')
+test_embeddings2 = generate_embeddings('Dwayne Johnson4.jpg')
+
+# Perform PCA on test embeddings
+reduced_test_embeddings1 = pca.transform(np.array([test_embeddings1]))
+reduced_test_embeddings2 = pca.transform(np.array([test_embeddings2]))
+
+# Make predictions using the SVM classifier
+prediction1 = svm_classifier.predict(reduced_test_embeddings1)
+prediction2 = svm_classifier.predict(reduced_test_embeddings2)
+
+print(f"Prediction for test image 1: {prediction1}")
+print(f"Prediction for test image 2: {prediction2}") 
+
